@@ -1,0 +1,4 @@
+True corner-trap — _try_move case 4 just freezes. Need to try escape directions.
+Prey hugging walls — R_WALL_PENALTY = 0.8 is too weak to overcome the prey's survival incentive. Needs to be much stronger for prey, and a stuck penalty that escalates the longer the agent doesn't move.
+Stuck counter in observation — the policy has no way to know it's stuck, so it can't learn to react. Adding a normalized stuck-steps counter gives it that signal.
+MAX_TIMESTEPS → 500 (was 1000)

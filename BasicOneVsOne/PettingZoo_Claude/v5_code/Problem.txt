@@ -1,0 +1,3 @@
+Agents stop on collision with boundary or obstacle:
+
+The bug is in _try_move. When a collision is detected, it returns pos.copy() — a full stop, zero movement. So the agent is literally frozen in place for every step it's against an obstacle or being pushed into a wall. The fix is to implement sliding collision: when the full move collides, try each axis independently. If X works but Y doesn't, the agent slides along X, and vice versa.

@@ -1,0 +1,3 @@
+Corner-seeking is a reward hack — the heading bonus pushes the hunter directly into walls whenever the prey is on the other side of an obstacle, so it gets stuck. The prey learns corners are safe (fewer approach angles).
+The normalizer is being updated with already-normalized data — buf_obs stores normalized observations but the normalizer is then updated from that, creating a feedback loop that corrupts the statistics.
+Single-environment training is too slow — with one env and 57-dim observations in a complex adversarial setting, the policy hasn't seen enough diverse situations.

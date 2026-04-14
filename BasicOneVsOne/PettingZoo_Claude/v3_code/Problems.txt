@@ -1,0 +1,7 @@
+Equal speeds — the fundamental blocker: Both agents use AGENT_SPEED = 5. A prey that always runs directly away can never be caught by a hunter of equal speed. This creates a degenerate Nash equilibrium where the hunter can't improve its capture reward no matter what it does, so the training signal effectively dies. This is why all 5 episodes end in "escaped".
+
+Hunter obstacle penalty is too harsh (R_OBSTACLE_HIT = -2.0): This discourages the hunter from navigating near obstacles at all, even though doing so is required to pursue prey.
+
+No proximity shaping: There's a large reward gap — full capture reward only at distance ≤30px, then nothing. A dense proximity bonus will guide the hunter.
+
+Training could be more robust: Low starting entropy, no annealing, only 5M steps.
