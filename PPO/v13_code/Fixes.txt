@@ -1,0 +1,4 @@
+Earlier curriculum: mud at 45% (6.75M steps), ice at 62% (9.3M steps) — terrain introduced while prey still has room to improve
+R_BAIT_ICE = 1.0: one-time bonus for the prey when the hunter enters an ice zone while the prey is within THREAT_RADIUS and not frozen itself. Same magnitude as R_LOS_BREAK, teaches the "luring" behavior explicitly
+R_MUD_DRAG = 0.04/step: continuous bonus while hunter is in mud (speed advantage neutralised). Teaches the prey to recognise and maintain "hunter in mud" as a favorable state
+Ice-aware _cover_direction: when prey is under threat, the nearest ice zone is now included as a candidate cover target alongside solid obstacles, giving the prey the same directional "run toward THIS" cue it already had for obstacle cover

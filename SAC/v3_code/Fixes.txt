@@ -1,0 +1,6 @@
+Velocity observations (other_vel, 2 floats): each agent now sees the other's actual displacement from the previous step, normalised by rated speed — enough information for the policy to learn true interception geometry.
+_compute_nav_dir(): a new method that finds the lowest-cost bypass corner around blocking obstacles. When LOS is blocked, the hunter's heading reward is computed against this bypass direction instead of straight through the wall.
+Hunter movement bonus (R_MOVE_H = 0.015): a tiny reward for moving freely without bumping, breaking the zero-gradient trap at obstacle faces.
+The old "Hunter search reward" section is removed — it's fully superseded by the nav-dir heading reward.
+obs_size: 43 → 47 (both agents get +2 velocity and +2 nav direction features).
+HIDDEN["hunter"]: 128 → 192 to match prey capacity for the harder pursuit + interception + navigation task.
