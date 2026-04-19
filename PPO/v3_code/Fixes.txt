@@ -1,0 +1,13 @@
+Here's what changed across all three files:
+env.py — Three fixes
+The wall-freeze bug (your screenshot) was caused by the axis-slide fallback having no escape path when both X-only and Y-only slides were blocked — which happens at wall-obstacle junctions where the wall blocks one axis and the obstacle blocks the other. The fix adds an 8-direction escape probe after the axis slides fail. It tries each direction at full speed, then half, then quarter, sorted by similarity to the agent's intended heading. Over 100 random-action stress-test episodes, the longest stuck streak dropped from multiple-seconds to zero frames.
+Wall distances (4 floats) were added to the observation vector so agents can see how close they are to each edge before hitting it. Without this, the policy only discovered walls through collision, which is too late to course-correct cleanly. Obs size goes from 33 → 37.
+Obstacle spawn margin was increased from 20px to agent_radius × 4 (40px), preventing obstacles from spawning flush against screen edges where they create tight traps. Over 100 random maps, zero obstacles spawned within 30px of any wall.
+train.py — Learning dynamics log
+Every LOG_EVERY updates, a JSON entry is appended to a list with: update number, global step, episode count, capture rate, average episode length, current obstacle range, wall-clock time, steps-per-second, and per-agent average return, policy-gradient loss, value-function loss, and entropy. The full list is written to models/train_log.json at the end of training. This gives you the complete learning curve for plotting capture rate over time, return trajectories, entropy decay, and curriculum phase transitions.
+evaluate.py — Episode-level post-processing data
+Each evaluation episode now saves to gifs/eval_log.json:
+
+Trajectory: per-step hunter position, prey position, inter-agent distance, and line-of-sight flag — everything you need to reconstruct the chase path, measure approach velocity, and identify when the prey used cover.
+Terrain: every obstacle's x/y/w/h — you can overlay the trajectory on the obstacle layout for spatial analysis.
+Summary: captured/escaped, total steps, start distance, end distance, obstacle count.

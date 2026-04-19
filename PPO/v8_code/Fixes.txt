@@ -1,0 +1,12 @@
+All three files updated. Here's the summary:
+The core problem: The prey never experienced a successful escape across 10M training steps. With 97–100% capture rate, the prey's value function learned V(every state) ≈ -97 — all actions equally bad. The prey just maximized the tiny per-step heading reward before the inevitable -100 capture. It had no concept of what "surviving to timeout" looked like because it had never happened.
+env.py — 3 changes
+Speed curriculum support (set_speeds() method): Allows train.py to ramp the hunter's speed over training. The default speed is now 4.5/4.0 (used at evaluation).
+Time-scaled capture penalty: R_CAPTURE_P × (1 - 0.5 × steps/max_steps). Getting caught at step 1 costs -100, at step 250 costs -75, at step 450 costs -55. This gives the prey a 40-point gradient between early and late capture — even when capture is inevitable, the prey has a clear signal that "delaying capture is better." Previously, getting caught at step 50 and step 450 gave identical -100, so the prey had no reason to delay.
+train.py — 1 major change
+Speed curriculum — the single most important fix. Four phases:
+PhaseTraining %Hunter speedGapOpen-space catchable?10–15%4.00.0No — prey escapes freely215–40%4.20.2No — 2500 steps needed, limit is 500340–70%4.30.3Barely — needs obstacle use470–100%4.50.5Yes — prey must use cover
+In Phase 1, the prey experiences timeouts (+30 reward) regularly and learns that survival is valuable. In Phase 2, it still escapes most of the time but starts needing to avoid corners. By Phase 3, it must actively use obstacles. Phase 4 is the final difficulty where only tactical cover-use lets the prey survive.
+This is the same principle as the obstacle curriculum — don't throw the agent into the hardest version and expect it to discover the solution from scratch. Let it learn the fundamentals (survival is good → walls are bad → obstacles are useful) before facing the full challenge.
+evaluate.py: Updated to use final speeds (4.5/4.0) for evaluation.
+What to expect: During Phase 1 training, capture rate should drop to ~30–50% (prey escapes in open space). As the hunter speeds up in Phases 2–3, capture rate should climb but the prey should show obstacle-seeking behavior. By Phase 4, you should see a capture rate around 60–80% — the prey escapes by hiding behind obstacles, the hunter catches it in open space. This is the competitive equilibrium we've been targeting.
