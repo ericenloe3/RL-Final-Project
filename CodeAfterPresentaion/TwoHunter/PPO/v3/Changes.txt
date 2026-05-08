@@ -1,0 +1,28 @@
+Summary of changes for v3
+Diagnosis
+The PPO v2 results show two facts in tension. First, the curriculum worked: capture rate stayed near 0% for the first 2M steps in the prey-favored phase. Second, once the curriculum ramped to 4.5/4.5, the contest collapsed to the same outcome as v1 — 100% capture rate by step 5M and prey return locked at −87. Eval LOS-break counts dropped from huge (179, 243) to single digits, confirming v2's R_LOS_BREAK = 0.15 reduction worked, but at the cost of removing the prey's main "obstacles are good" signal. The GIFs show the prey in mostly open positions because the policy gradient now points toward "run away in the open" — the heading reward is the only meaningful per-step signal and it's cover-agnostic.
+The core insight
+The v2 R_LOS_BREAK reduction fixed the rapid-cycling exploit but threw out the cover-use signal entirely. The right design replaces transitional rewards (rare events) with sustained-state rewards (per-step credit for being currently hidden). This:
+
+Eliminates rapid cycling (a quick break-and-resume now gets ~1 step of reward, not a full transition bonus)
+Rewards the actually-desired behavior (staying behind cover)
+Naturally scales with the value of cover (longer hiding = larger reward)
+
+Changes implemented
+env.py:
+
+R_LOS_BREAK reduced 0.15 → 0.05 (kept small as transition-only credit)
+NEW R_HIDDEN = 0.01 per step per hunter with LOS currently blocked
+NEW R_HIDDEN_BOTH = 0.02 extra per step when both LOSes blocked simultaneously
+
+The math: max possible cover-related reward per step is now 2 × 0.01 + 0.02 = 0.04. Over a 450-step episode of perfect double-cover, that's +18, meaningful relative to the +20 timeout reward. Rapid cycling no longer pays out — each transition gives only 0.05 + 0.01 = 0.06 (one transition bonus + one step of hidden reward), vs the old design's flat 0.15 per cycle.
+train.py:
+
+Prey log_std clamp −3.0 to +0.0 → −3.0 to −0.5. The 0.0 cap was still saturated for the entire run; tightening to −0.5 caps action std at exp(−0.5) ≈ 0.6, halving the noise floor in sampled actions.
+Prey end entropy coefficient 0.001 → 0.0001. Effectively zero by training's end. Combined with the tighter clamp, the policy gradient should finally dominate the entropy bonus.
+Final-phase hunter speed 4.5 → 4.4 (curriculum endpoint). Restores a permanent 2% prey speed advantage. This is the unspoken precondition for cover-use to actually pay off in capture survival — at exactly 4.5/4.5, two coordinated hunters can geometrically pinch any prey regardless of obstacles, so cover only delays inevitable capture by a few seconds. At 4.4/4.5, the prey can escape forming pinches, and good cover-use is what makes those escapes possible.
+
+What you should see in the next run
+The diagnostic to watch is prey log_std behavior. In v1 it pinned at +0.5 throughout. In v2 it pinned at +0.0 throughout. In v3 the goal is for it to actually descend below the new −0.5 cap — that would mean the policy gradient is finally winning over the entropy bonus.
+The behavioral diagnostic is average LOS-block fraction across an episode (something the new logging could compute by averaging 1 - los_h1 and 1 - los_h2 across the trajectory). If the prey learned cover-use, this number should rise meaningfully — perhaps from ~10% in v2 (mostly visible) to 30-50% (significant time behind cover). The eval GIFs would then show the prey deliberately positioning itself behind obstacles, with capture happening when hunters successfully flank rather than when the prey runs out of room.
+If capture rate stays at 100% but episode length grows from v2's ~135 steps to something like 250+, that's the prey learning to stall via cover even if it can't ultimately escape — a partial win that previous versions never achieved. If capture rate drops below 100% with sustained survival episodes appearing in eval, that's the full success outcome.

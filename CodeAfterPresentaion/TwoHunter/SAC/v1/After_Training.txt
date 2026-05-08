@@ -1,0 +1,27 @@
+What happened — the SAC 2v1 collapse
+The training trajectory is the mirror image of PPO 2v1 from a few iterations ago:
+
+Capture rate peaked at 100% around step 730k and stayed at 100% for ~3M steps (1M to 4M). The hunters dominated.
+Then capture rate started falling — through 99%, 90%, 76%, 47%, 35% — and finished at 19% with prey return at +5.7.
+Hunter α hit the 0.02 floor at step 7.1M. Prey α hit the floor at step 135k (very early).
+By the end, both α values are pinned at the floor, prey live entropy is ~0.48, hunter live entropy is ~0.58.
+
+So this isn't the alpha-collapse-and-crash failure of v5 — the v6 floor mechanism worked. But something more interesting happened: the prey learned to evade so well that the hunters could no longer catch it, and once α hit the floor the hunters had no exploration budget to rediscover their pursuit policy against the now-skilled prey.
+The two specific weird behaviors in GIFs 1 and 5
+Episode 1 stat is illuminating: 179 LOS breaks in 600 steps. That means the prey is breaking line-of-sight to hunter1 nearly every 3 steps on average — but it's not escaping cleanly, it's cycling around obstacles. The hunters are clearly tracking it but never close in. This is likely an obstacle-orbit deadlock: the prey runs around an obstacle, both hunters approach, the prey crosses to the other side, hunters readjust, and the cycle continues.
+Episode 5 has 102 LOS breaks and shows the agents in a wide spread: the prey is in the middle, h1 to its right, h2 far below-right. Both hunters have clear LOS but the prey is moving consistently in a way they can't catch. Looking at the eval log episode 5 has 102+49 = 151 total LOS breaks, suggesting persistent dodging behavior.
+The pattern: the hunters' coordination broke down. With α at floor and live entropy at +0.58 nats, the hunter policy is somewhat random; both hunters using the same network produces two agents acting like one wobbling agent rather than two coordinated agents. They don't flank, they don't pinch — they just both vaguely chase, and the prey learned to exploit exactly that.
+Why this is structurally different from PPO 2v1
+In PPO 2v1, capture rate stuck at 100% — the hunters' winning policy was stable. In SAC 2v1, the hunters had a winning policy and lost it because:
+
+The prey learned faster than the hunters could re-adapt. Off-policy SAC's replay buffer kept feeding the hunters Q-targets computed from a static policy, while the prey was actively exploring (its α was floored and entropy was modest, but its critic was tracking the moving distribution well).
+Once both αs hit the floor, the policies stopped having exploration headroom. The hunters were stuck with whatever pursuit pattern they had, and it was vulnerable to the prey's evolving evasion.
+There's no curriculum in the SAC 2v1 setup — speeds are fixed at 4.5/4.5 throughout. The hunters never got an "easy phase" to lock in pursuit fundamentals before the prey caught up.
+
+On your episode-length question
+Same answer as for PPO 2v1: shortening episodes does not make the contest fairer per step, but here it might actually hurt the hunters because they need long enough episodes to demonstrate the patient flanking behavior that catches a competent prey. With the prey now winning ~80% of episodes anyway, the marginal value of more episode resets isn't worth giving up time-to-coordinate. I'm keeping max_steps at 600 for SAC — the opposite call from what I made for PPO 2v1, where the prey was losing every episode and needed faster signal turnover.
+Fixes to implement
+Three changes:
+1. Speed curriculum re-introduced, but pointed the opposite direction from PPO 2v1. In PPO the prey was losing, so I made hunters slower → prey-favoured → ramp up. In SAC the prey is winning, so I'll make hunters start equal at 4.5/4.5 and ramp to a small advantage at 4.7/4.5. This gives the hunters a small geometric boost they can use to recapture lost ground in late training.
+2. Asymmetric α floors. Hunter floor raised 0.02 → 0.05; prey floor kept at 0.02. The hunters need more sustained exploration than the prey because they have the harder coordination problem (two-agent pinch is geometrically more complex than one-agent escape). With α=0.05 the hunters retain meaningful exploration even after auto-tuning gives up.
+3. Prey reward shaping rebalance. The prey's R_LOS_BREAK was split as 0.25 per hunter, total 0.5/step possible. With the prey now winning, this signal has become too effective at teaching evasion. Reduce R_LOS_BREAK from 0.25 to 0.15 per hunter so the prey's primary signal comes from actual escape (heading reward + survival bonus), not from rapidly cycling LOS state.

@@ -1,0 +1,24 @@
+Summary
+Diagnosis
+The training trajectory tells a striking story — the hunters had a winning policy and lost it:
+
+Capture rate peaked at 100% at step 730k and stayed there for ~3M steps.
+Then it crashed: 99% at 4M → 47% at 6.7M → 19% by 10M.
+Both αs hit the 0.02 floor (prey at 135k, hunter at 7.1M). The v6 floor mechanism worked — no catastrophic collapse — but at α=0.02 the hunters had no exploration headroom to adapt.
+Eval shows the prey survives 11/15 episodes for the full 600 steps. The episodes the hunters do win are short (73-167 steps), suggesting they only succeed when the prey starts in an unlucky position.
+
+The "weird hunter behavior" in GIFs 1 and 5 is the visible symptom of this dynamic. Episode 1 had 179 LOS breaks in 600 steps — almost one every 3 steps. The prey learned to cycle around obstacles in a way the hunters can track but not catch. The hunters just both vaguely chase without flanking; the parameter sharing produced "two agents acting like one wobbling agent" rather than two coordinated agents. Off-policy SAC's replay buffer made this worse: while the prey was actively exploring its way to better evasion, the hunters' Q-targets kept getting computed against stale data, locking them into a defunct pursuit pattern.
+This is structurally the opposite failure from PPO 2v1 (where the hunters dominated 100% throughout). In PPO the prey couldn't get any winning episodes to learn from. In SAC the prey learned faster than the off-policy hunters could track.
+On episode length
+Same answer as PPO: shortening episodes does not change per-step game dynamics. But here the calculus actually points the other way — with the prey already winning ~80% of episodes, the hunters need long episodes to demonstrate patient flanking against a competent prey. Shorter episodes would just produce more prey wins per training update. I kept SAC's max_steps at 600 while PPO uses 450 — opposite calls justified by the methods' opposite failure modes.
+Three fixes implemented
+1. Speed curriculum re-introduced, hunter-favoured at the end. Equal speeds (4.5/4.5) for the first 50% of training to match v1's working dynamics during the hunter-dominant period, then hunters ramp to 4.7 vs prey 4.5 for the second half. The 0.2-unit advantage gives the hunters a small geometric edge that compensates for their α-floor exploration deficit during the period when v1's prey was running away with the contest. This is the opposite direction from the PPO 2v1 fix (where I made hunters slower because the prey was losing) — same asymmetric-scaffolding logic applied to opposite failure modes.
+2. Asymmetric α floors. Hunter floor raised 0.02 → 0.05; prey floor kept at 0.02. Reasoning: the hunters have the harder coordination problem (two-agent pinch geometry is more complex than single-agent escape), and they're the agent type that visibly lost adaptation late in training. At α=0.05 the entropy bonus -α·log_prob ≈ -0.025 stays meaningful relative to the actor loss even after auto-tuning saturates, keeping coordination flexible. The prey floor stays at 0.02 because its v1 trajectory (returns climbing from −90 → +5.7) shows it didn't have the same lock-in problem.
+3. R_LOS_BREAK reduced 0.25 → 0.15 per hunter (env.py). Total possible per step drops 0.5 → 0.3. The eval data showed the prey was racking up huge LOS-break rewards by cycling rapidly around obstacles (179 breaks in one episode!) which trained it to game the LOS signal rather than execute genuine escape. Lowering the coefficient keeps the cover-seeking gradient but de-emphasises the rapid-cycling exploit that hurt the hunters most. Note this change applies to PPO too since they share env.py — it should be a small effect for PPO since its prey doesn't currently get enough winning episodes for LOS-break rewards to dominate its training, but worth flagging.
+What you should see in the next run
+
+Capture rate should still peak around 1M steps (hunters dominate early as before).
+The crash phase (4M → 10M in v1) should be less severe because of the late-training speed boost and higher hunter α-floor.
+Final capture rate should land somewhere in the 40-70% range rather than 19% — that would represent a healthier equilibrium where neither side dominates.
+LOS-break counts in eval should drop substantially from v1's 179 maximum, since the lower R_LOS_BREAK removes the gameable signal.
+If the hunters still lose dominance late in training, the next move would be to actually freeze hunter exploration entirely after step 8M (set hunter actor optimizer to no-op) so its policy at peak performance is preserved.

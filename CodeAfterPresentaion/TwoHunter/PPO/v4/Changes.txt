@@ -1,0 +1,17 @@
+Summary of v4 changes
+The diagnosis from v3 data
+The trajectory analysis revealed the prey learned exactly one strategy: run in a straight line away from average hunter direction, hit a wall, slide along it, get caught in a corner. In GIF 1 the prey reached the left wall (distance=10px) by step 71 and stayed there until captured at step 142. LOS-breaks across all 15 eval episodes ranged from 0–5 — the prey was never using obstacles.
+The v3 R_HIDDEN reward of +0.01-0.04/step couldn't compete with R_HEADING's +0.10/step. Running paid more per step than hiding, so PPO converged to running. The wall penalty's binary 40px threshold gave zero gradient until the prey was already at the wall — by then the policy was already locked into the wall-trap behavior.
+Three fixes implemented
+Fix 1: Boost R_HIDDEN substantially (env.py). R_HIDDEN goes from 0.01 → 0.03 per blocked hunter; R_HIDDEN_BOTH goes from 0.02 → 0.05. The crossover point matters: hiding from both hunters now pays +0.11 per step, exceeding the +0.10/step cap on running. This is the load-bearing change — without it, the policy gradient still favors running.
+Fix 2: Graded wall penalty over 150px (env.py). Replaces the binary "in zone or not" 40px threshold with a continuous quadratic penalty starting at 150px from any wall. The penalty grows quadratically to -0.05 at the wall itself. Critically, this gives the prey a continuous gradient pushing it away from walls throughout its entire trajectory, not just when it's already against a wall. The verified reward at 100px = -0.0056, at 50px = -0.0222, at 10px = -0.0436. The "wall trap" attractor is no longer free to enter.
+Fix 3: Curriculum extended and final hunter speed reduced (train.py). Final phase ends at 80% (was 70%) and final hunter speed drops to 4.3 (was 4.4). This gives the prey:
+
+More training time in the prey-favored regime to discover that obstacles work
+5% permanent speed margin instead of 2% — enough that surviving the first hunter contact is geometrically possible if the prey uses cover
+
+What you should see in the next run
+The diagnostic to watch: average wall-distance during eval episodes. In v3 the prey ended every episode at wall-distance ≤ 10. In v4, if the wall penalty grading works, the prey should stay in the central region of the map. Expected: average prey position should be at wall-distance > 100 throughout most timesteps.
+The behavioral signal of success: eval LOS-break counts in the 15-30 range per successful episode. Currently 0-5 (no obstacle use). If the prey has learned to actually use cover, you'd see the prey transitioning into and out of LOS as it repositions behind obstacles when hunters approach from new angles.
+If capture rate finally drops below 100% (with prey escapes appearing in eval), the most likely shape is: 60-80% capture rate with a few full-600-step survival episodes mixed in. Those survival episodes would show the prey staying tucked behind a single obstacle while the hunters circle around — a stable hide configuration.
+If the prey still wall-traps despite all this, the next move would be to flip the heading reward conditional on LOS: full R_HEADING when seen (need to flee), zero when hidden (no need to move). That removes the run-incentive entirely once the prey is behind cover, but it's a bigger architectural change than what we did this round.

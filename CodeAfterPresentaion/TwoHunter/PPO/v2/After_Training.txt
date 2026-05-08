@@ -1,0 +1,1 @@
+Here are the v2 results for 2 hunters using the PPO method. It seems like the prey no longer uses the obstacles intelligently. How can we fix this so it tries to hide from the hunters better
